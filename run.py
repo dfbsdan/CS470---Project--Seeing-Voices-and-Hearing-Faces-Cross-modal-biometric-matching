@@ -38,10 +38,8 @@ def train(model, device, train_loader, loss_f, acc_funcs: list, optimizer,
   stats_idx = int(len(train_loader) / 30) # print stats ~30 times each epoch
   # NOTE: iS and iWS are two different integers uniquely assigned to the 
   # correct and incorrect speakers, respectively.
-  # voice tensor 'v' is assumed to be in the desired device already 
-  # (see data_loader.Dataset_Loader.__get_audio())
   for batch_idx, (v, f1, f2, target, iS, iWS) in enumerate(tqdm(train_loader)):
-    v, f1, f2, target = v, f1.to(device), f2.to(device), target.to(device)
+    v, f1, f2, target = v.to(device), f1.to(device), f2.to(device), target.to(device)
     assert len(v) == len(f1) and len(f1) == len(f2)
     optimizer.zero_grad()
     output: torch.tensor = model(v, f1, f2)
@@ -80,10 +78,8 @@ def test(model, device, test_loader, loss_f, acc_funcs: list):
   with torch.no_grad():
     # NOTE: iS and iWS are two different integers uniquely assigned to the 
     # correct and incorrect speakers, respectively.
-    # voice tensor 'v' is assumed to be in the desired device already 
-    # (see data_loader.Dataset_Loader.__get_audio())
     for v, f1, f2, target, iS, iWS in tqdm(test_loader):
-      v, f1, f2, target = v, f1.to(device), f2.to(device), target.to(device)
+      v, f1, f2, target = v.to(device), f1.to(device), f2.to(device), target.to(device)
       assert len(v) == len(f1) and len(f1) == len(f2)
       output: torch.tensor = model(v, f1, f2)
 
@@ -192,6 +188,10 @@ def main():
                         minutes-. If < 1, no timeout is assumed. Default: 120''')
   parser.add_argument('--data_path', type=str, default='./data', metavar='STR', 
                       help='''Path to the data folder. Default: "./data"''')
+  parser.add_argument('--workers', type=int, default=1, metavar='INT', 
+                      help='''Number of subprocesses used to load data. Must be
+                        greater or equal to 0. If 0, data is loaded in the main
+                        process. Default: 1''')
   args = parser.parse_args()
 
   model, loss, accs = model_dict[args.model]
@@ -200,17 +200,17 @@ def main():
     model = model(args.model_path if args.load == 'y' else None).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr_init, weight_decay=args.w_decay)
     scheduler = StepLR(optimizer, step_size=1, gamma=get_gamma(args.lr_init, args.lr_final, args.epochs))
-    train_loader, valid_loader = load_data(True, args.batch_sz, device, args.data_path)
+    train_loader, valid_loader = load_data(True, args.batch_sz, args.workers, args.data_path)
     for epoch in range(args.epochs):
       timeout = train(model, device, train_loader, loss, accs, optimizer, epoch, args.timeout)
-      test(model, device, valid_loader, loss, accs)
-      scheduler.step()
       if timeout:
         break
+      test(model, device, valid_loader, loss, accs)
+      scheduler.step()
     save_model(model, args.model_path)
   else:
     model = model(args.model_path).to(device)
-    test_loader = load_data(False, args.batch_sz, device, args.data_path)
+    test_loader = load_data(False, args.batch_sz, args.workers, args.data_path)
     test(model, device, test_loader, loss, accs)
 
 

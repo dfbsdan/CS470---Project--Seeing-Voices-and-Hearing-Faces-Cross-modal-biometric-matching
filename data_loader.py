@@ -28,7 +28,7 @@ transform_train = VT.Compose([
 
 
 class Dataset_Loader(torch.utils.data.Dataset):
-  def __init__(self, dataset: str, metadata: dict, device: torch.device, data_path: str):
+  def __init__(self, dataset: str, metadata: dict, data_path: str):
     if dataset == "train":
       self.transform = transform_train
       initials = "FGHIJKLMNOPQRSTUVWXYZ"
@@ -71,7 +71,6 @@ class Dataset_Loader(torch.utils.data.Dataset):
         self.data.append((voice, rightF, wrongF, label, iS, iWS))
       else:
         self.data.append((voice, wrongF, rightF, label, iS, iWS))
-    self.device = device
 
   def __len__(self):
     return len(self.data)
@@ -120,9 +119,8 @@ class Dataset_Loader(torch.utils.data.Dataset):
     channels, _ = wave.shape
     assert channels == 1 and rate == 16000
     # randomize rate to range: [0.95*rate, 1.05*rate]
-    # (tensor is moved to device at this point to speed up preprocessing)
     rate = int(rate * random.uniform(0.95, 1.05))
-    wave = AT.Resample(orig_freq=16000, new_freq=rate)(wave.to(self.device))
+    wave = AT.Resample(orig_freq=16000, new_freq=rate)(wave)
     channels, samples = wave.shape
     # extract random 3-second segment and convert to spectrogram
     extr_len = 3 * rate
@@ -132,7 +130,6 @@ class Dataset_Loader(torch.utils.data.Dataset):
         n_fft=1022,
         win_length=round(25*rate/1000), # 25ms window
         hop_length=round(rate/100), # 10ms hop
-        wkwargs={"device": self.device},
         center=True,
         pad_mode="reflect",
       ),
@@ -172,19 +169,19 @@ def get_metadata(data_path: str):
   return metadata
 
 
-def load_data(train: bool, batch_sz: int, device: torch.device, data_path: str):
-  assert batch_sz > 0
+def load_data(train: bool, batch_sz: int, workers: int, data_path: str):
+  assert batch_sz > 0 and workers >= 0
   metadata = get_metadata(data_path)
   if train:
-    trainset = Dataset_Loader("train", metadata, device, data_path)
+    trainset = Dataset_Loader("train", metadata, data_path)
     train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_sz, 
-      shuffle=True, num_workers=0, collate_fn=batch_fn)
-    validset = Dataset_Loader("valid", metadata, device, data_path)
+      shuffle=True, num_workers=workers, collate_fn=batch_fn)
+    validset = Dataset_Loader("valid", metadata, data_path)
     valid_loader = torch.utils.data.DataLoader(validset, batch_size=batch_sz, 
-      shuffle=False, num_workers=0, collate_fn=batch_fn)
+      shuffle=False, num_workers=workers, collate_fn=batch_fn)
     return train_loader, valid_loader
   else:
-    testset = Dataset_Loader("test", metadata, device, data_path)
+    testset = Dataset_Loader("test", metadata, data_path)
     test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_sz, 
-      shuffle=False, num_workers=0, collate_fn=batch_fn)
+      shuffle=False, num_workers=workers, collate_fn=batch_fn)
     return test_loader
