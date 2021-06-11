@@ -119,8 +119,8 @@ class Dataset_Loader(torch.utils.data.Dataset):
     channels, _ = wave.shape
     assert channels == 1 and rate == 16000
     # randomize rate to range: [0.95*rate, 1.05*rate]
-    rate = int(rate * random.uniform(0.95, 1.05))
-    wave = AT.Resample(orig_freq=16000, new_freq=rate)(wave)
+    effect = [["speed", str(random.uniform(0.95, 1.05))]]
+    wave, rate = torchaudio.sox_effects.apply_effects_tensor(wave, 16000, effect)
     channels, samples = wave.shape
     # extract random 3-second segment and convert to spectrogram
     extr_len = 3 * rate
