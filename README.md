@@ -1,10 +1,17 @@
-## CS470-Project
+# CS470-Project
 
-# SVHFNet.py:
+## run.py:
   Main program.
  
-# models.py:
+## models.py:
   Neural Net model definitions.
 
-# data_loader.py:
+## data_loader.py:
   Data loading module.
+
+## Requirements (pytorch modules must have cuda support)
+torch
+tqdm
+torchvision
+torchaudio
+PIL
