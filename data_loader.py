@@ -49,7 +49,7 @@ class Dataset_Loader(torch.utils.data.Dataset):
     names = list(metadata)
     valid_names = [name for name in names if name[0] in initials]
     chosen = dict()
-    print(f"Generating {dataset} dataset of size: {samples}...")
+    tqdm.write(f"Generating {dataset} dataset of size: {samples}...")
     for _ in tqdm(range(samples)):
       # get random -unique- sample
       attempts = 0
