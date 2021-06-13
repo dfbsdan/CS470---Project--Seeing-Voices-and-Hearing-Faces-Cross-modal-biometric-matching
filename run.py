@@ -8,7 +8,7 @@ from tqdm import tqdm
 import math
 ################################################################################UNUSED IN COLAB
 from data_loader import load_data
-from models import SVHF_Net, RandomNet
+from models import SVHF_Net
 ###############################################################################################
 
 
@@ -30,11 +30,10 @@ def update_marginal_stats(correct_mrg: dict, correct: torch.tensor, speakers: to
 
 
 def train(model, device, train_loader, loss_f, acc_funcs: list, optimizer, 
-          epoch: int, timeout: int):
+          epoch: int, timeout: int, t_init: float):
   model.train()
   correct_cnt = 0
   correct_mrg = dict()
-  start_time = time.time()
   stats_idx = int(len(train_loader) / 30) # print stats ~30 times each epoch
   # NOTE: iS and iWS are two different integers uniquely assigned to the 
   # correct and incorrect speakers, respectively.
@@ -63,7 +62,7 @@ def train(model, device, train_loader, loss_f, acc_funcs: list, optimizer,
         acc = acc_func(correct_cnt, cur_iter, correct_mrg)
         tqdm.write('\t' + acc_str + f': {acc}')
     # check timeout
-    if (timeout > 0 and ((time.time() - start_time) / 60) >= timeout):
+    if (timeout > 0 and ((time.time() - t_init) / 60) >= timeout):
       print("\n****----Timeout!.----****\n")
       return True
   return False
@@ -92,7 +91,7 @@ def test(model, device, test_loader, loss_f, acc_funcs: list):
 
   # print stats
   loss/=len(test_loader.dataset)
-  print(f'Average Loss: {round(loss.item(), 6)}')
+  print(f'Average Loss: {round(loss, 6)}')
   # accuracies
   for acc_func, acc_str in acc_funcs:
     acc = acc_func(correct_cnt, len(test_loader.dataset), correct_mrg)
@@ -133,14 +132,6 @@ def main():
   model_dict = {
     'baseline': (
       SVHF_Net, 
-      F.nll_loss, 
-      [
-        (accuracy, "Total Accuracy"), 
-        (avg_marginal_acc, "Average Marginal Accuracy")
-      ]
-    ),
-    'random': (
-      RandomNet, 
       F.nll_loss, 
       [
         (accuracy, "Total Accuracy"), 
@@ -201,13 +192,14 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr_init, weight_decay=args.w_decay)
     scheduler = StepLR(optimizer, step_size=1, gamma=get_gamma(args.lr_init, args.lr_final, args.epochs))
     train_loader, valid_loader = load_data(True, args.batch_sz, args.workers, args.data_path)
+    t_init = time.time()
     for epoch in range(args.epochs):
-      timeout = train(model, device, train_loader, loss, accs, optimizer, epoch, args.timeout)
+      timeout = train(model, device, train_loader, loss, accs, optimizer, epoch, args.timeout, t_init)
+      save_model(model, args.model_path)
       if timeout:
         break
       test(model, device, valid_loader, loss, accs)
       scheduler.step()
-    save_model(model, args.model_path)
   else:
     model = model(args.model_path).to(device)
     test_loader = load_data(False, args.batch_sz, args.workers, args.data_path)
